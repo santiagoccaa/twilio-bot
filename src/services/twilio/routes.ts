@@ -1,8 +1,11 @@
 import { Router } from "express";
-import { handleReciveCall } from "./controller";
+import { handleReceiveCall,handleProcessSpeech,getErrors } from "./controller";
 
 const routes = Router();
 
-routes.post("/call", handleReciveCall);
+routes.post("/call", handleReceiveCall);
+routes.post("/process", handleProcessSpeech);
+routes.post("/errors", getErrors);
+
 
 export default routes;
