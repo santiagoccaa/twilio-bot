@@ -25,7 +25,13 @@ export const handleReceiveCall = (req: Request, res: Response) => {
     enhanced: true,
   });
 
-  gather.say("Hola. ¿en que puedo ayudarte?");
+  gather.say(
+    {
+      voice: "Polly.Mia",
+      language: "es-MX",
+    },
+    "Hola. ¿En qué puedo ayudarte?",
+  );
 
   res.type("text/html");
   res.send(twiml.toString());
