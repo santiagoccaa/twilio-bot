@@ -7,11 +7,11 @@ import twilio from "twilio";
 export const handleReceiveCall = (req: Request, res: Response) => {
   console.info("😀 [handleReceiveCall] started");
 
-  console.log("📞 Incoming call");
-  console.log("Body:", req.body);
-  console.log("From:", req.body.From);
-  console.log("To:", req.body.To);
-  console.log("CallSid:", req.body.CallSid);
+  // console.log("📞 Incoming call");
+  // console.log("Body:", req.body);
+  // console.log("From:", req.body.From);
+  // console.log("To:", req.body.To);
+  // console.log("CallSid:", req.body.CallSid);
 
   const twiml = new twilio.twiml.VoiceResponse();
 
