@@ -19,6 +19,8 @@ export const gemini = async (contents: string) => {
 
     const rawText = response.text || "Disculpe, no pude procesar su pregunta.";
 
+    console.log(`🤖 RESPUESTA IA: ${response}`);
+
     return rawText;
   } catch (error) {
     console.error("❌ Error en la llamada a Gemini:", error);

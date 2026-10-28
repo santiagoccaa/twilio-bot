@@ -157,7 +157,14 @@ export const handleProcessSpeech = async (req: Request, res: Response) => {
       });
 
       // Opcional: Decir "¿Algo más?"
-      nextGather.say("¿Tiene otra pregunta?");
+
+      nextGather.say(
+        {
+          voice: "Polly.Mia",
+          language: "es-MX",
+        },
+        "¿Tiene otra pregunta?",
+      );
     }
   } catch (error) {
     console.error("Error en IA o flujo:", error);
