@@ -29,7 +29,7 @@ export const handleReceiveCall = (req: Request, res: Response) => {
       voice: "Polly.Mia",
       language: "es-MX",
     },
-    "Hola bienvenido. Soy el asistente virtual. ¿En qué puedo ayudarle?",
+    "Hola bienvenido. ¿En qué puedo ayudarle?",
   );
 
   res.type("text/xml");
