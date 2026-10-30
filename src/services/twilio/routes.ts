@@ -5,7 +5,8 @@ const routes = Router();
 
 routes.post("/call", handleReceiveCall);
 routes.post("/process", handleProcessSpeech);
-routes.post("/errors", getErrors);
+// routes.post("/comprar", handleProcessSpeech);
 
+routes.post("/errors", getErrors);
 
 export default routes;

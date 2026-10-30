@@ -3,7 +3,7 @@ import twilio from "twilio";
 import { respondUser } from "./service";
 
 /**
- * Iniciar Llamada
+ * 📞 SE DISPARA CUANDO TWILIO RECIBE UNA LLAMADA
  */
 export const handleReceiveCall = (req: Request, res: Response) => {
   console.info("😀 [handleReceiveCall] started");
@@ -26,7 +26,7 @@ export const handleReceiveCall = (req: Request, res: Response) => {
 
   gather.say(
     {
-      voice: "Polly.Mia",
+      voice: "Google.es-US-Chirp3-HD-Aoede",
       language: "es-MX",
     },
     "Hola bienvenido. ¿En qué puedo ayudarle?",
@@ -39,7 +39,7 @@ export const handleReceiveCall = (req: Request, res: Response) => {
 };
 
 /**
- * Proceso de Voz (Loop)
+ * 💬 Proceso de Voz (Loop)
  */
 export const handleProcessSpeech = async (req: Request, res: Response) => {
   console.info("🎤 [handleProcessSpeech] started");
@@ -47,7 +47,7 @@ export const handleProcessSpeech = async (req: Request, res: Response) => {
   const twiml = new twilio.twiml.VoiceResponse();
 
   // 1. Obtener el turno actual desde la query string
-  const maxTurns = 5; // Límite de seguridad para costos
+  const maxTurns = 50; // TODO: Límite de seguridad para costos
   let currentTurn = parseInt(req.query.turnCount as string, 10) || 1;
 
   // 2. Obtener la transcripción
@@ -59,10 +59,24 @@ export const handleProcessSpeech = async (req: Request, res: Response) => {
       // Si es el primer turno y no dijo nada, repetimos.
       // Si ya lleva muchos turnos de silencio, colgamos.
       if (currentTurn > 3) {
-        twiml.say("Gracias por su llamada, hasta pronto.");
+        twiml.say(
+          {
+            voice: "Polly.Mia",
+            language: "es-MX",
+          },
+          "Gracias por su llamada, hasta pronto.",
+        );
+
         twiml.hangup();
       } else {
-        twiml.say("Disculpe, no le entendí. ¿Me repite la pregunta?");
+        twiml.say(
+          {
+            voice: "Polly.Mia",
+            language: "es-MX",
+          },
+          "Disculpe, no le entendí. ¿Me repite la pregunta?",
+        );
+
         // Mantenemos el mismo turnCount si es solo un rechazo,
         // o lo incrementamos para contar intentos.
         // Para simplicidad de costos, incrementamos.
@@ -92,7 +106,15 @@ export const handleProcessSpeech = async (req: Request, res: Response) => {
 
         // Reestructurando la respuesta para el caso de silencio:
         twiml.clear(); // Limpiamos lo anterior
-        twiml.say("Disculpe, no le entendí. ¿Me repite?");
+
+        twiml.say(
+          {
+            voice: "Polly.Mia",
+            language: "es-MX",
+          },
+          "Disculpe, no le entendí. ¿Me repite?",
+        );
+
         const retryGather = twiml.gather({
           input: ["speech"],
           action: `/twilio/process?turnCount=${nextTurn}`,
@@ -111,8 +133,11 @@ export const handleProcessSpeech = async (req: Request, res: Response) => {
       return;
     }
 
+    // ===============================================================
     // Caso 2: El usuario dijo algo
-    // Verificar palabras de salida
+    // 👀 VERIFICACION DE PALABRAS PARA COLGAR 👀
+    // ===============================================================
+
     const lowerSpeech = speechResult.toLowerCase();
     if (
       lowerSpeech.includes("adios") ||
@@ -120,16 +145,34 @@ export const handleProcessSpeech = async (req: Request, res: Response) => {
       lowerSpeech.includes("colgar") ||
       lowerSpeech.includes("salir")
     ) {
-      twiml.say("Gracias, que tenga un buen día.");
+      twiml.say(
+        {
+          voice: "Polly.Mia",
+          language: "es-MX",
+        },
+        "Gracias, que tenga un buen día.",
+      );
+
       twiml.hangup();
       res.type("text/xml");
       res.send(twiml.toString());
       return;
     }
 
+    // ===============================================================
+    // ⭐⭐⭐⭐⭐⭐⭐ ⭐⭐ POSIBLE COMPRA ⭐⭐⭐⭐⭐⭐⭐ ⭐⭐
+    // ===============================================================
+
+    // ===============================================================
     // Consulta a la IA
     if (currentTurn > maxTurns) {
-      twiml.say("Llegamos al límite de conversaciones. Gracias.");
+      twiml.say(
+        {
+          voice: "Polly.Mia",
+          language: "es-MX",
+        },
+        "Llegamos al límite de conversaciones. Gracias.",
+      );
       twiml.hangup();
     } else {
       const aiResponse = await respondUser(speechResult);
@@ -150,7 +193,7 @@ export const handleProcessSpeech = async (req: Request, res: Response) => {
         method: "POST",
         speechTimeout: "auto",
         language: "es-CO", // Mantén el idioma de reconocimiento
-        timeout: 6, // Espera máx de 6 seg para que empiece a hablar
+        timeout: 60, // TODO: Espera máx de 60 seg para que empiece a hablar
         enhanced: true,
         bargeIn: true, // Crucial para que no le hables por encima
         actionOnEmptyResult: true,
@@ -158,17 +201,24 @@ export const handleProcessSpeech = async (req: Request, res: Response) => {
 
       // Opcional: Decir "¿Algo más?"
 
-      nextGather.say(
-        {
-          voice: "Polly.Mia",
-          language: "es-MX",
-        },
-        "¿Tiene otra pregunta?",
-      );
+      // nextGather.say(
+      //   {
+      //     voice: "Polly.Mia",
+      //     language: "es-MX",
+      //   },
+      //   "¿Tiene otra pregunta?",
+      // );
     }
   } catch (error) {
     console.error("Error en IA o flujo:", error);
-    twiml.say("Se produjo un error interno. Lamento el inconveniente.");
+
+    twiml.say(
+      {
+        voice: "Polly.Mia",
+        language: "es-MX",
+      },
+      "Se produjo un error interno. Lamento el inconveniente.",
+    );
     twiml.hangup();
   }
 
@@ -177,7 +227,9 @@ export const handleProcessSpeech = async (req: Request, res: Response) => {
   console.info("😎 [handleProcessSpeech] finished");
 };
 
-// Handle errors de Twilio si el webhook falla
+/**
+ * ⁉️ Handle errors de Twilio si el webhook falla
+ */
 export const getErrors = (req: Request, res: Response) => {
   console.error("💢 ERROR Twilio:", req.body);
   // Enviar 200 para no hacer que Twilio reintente infinitely

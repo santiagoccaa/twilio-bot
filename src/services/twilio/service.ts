@@ -1,4 +1,5 @@
 import { systemPrompt } from "@/config/openAi.prompt";
+import { systemPrompt2 } from "@/config/prompt";
 import { optimizeText } from "@/utils";
 import { GoogleGenAI } from "@google/genai";
 
