@@ -1,237 +1,303 @@
+
 import { Request, Response } from "express";
 import twilio from "twilio";
 import { respondUser } from "./service";
 
-/**
- * 📞 SE DISPARA CUANDO TWILIO RECIBE UNA LLAMADA
- */
-export const handleReceiveCall = (req: Request, res: Response) => {
-  console.info("😀 [handleReceiveCall] started");
+const MAX_TURNS = 50;
+const MAX_SILENCES = 3;
 
-  const twiml = new twilio.twiml.VoiceResponse();
+const VOICE = "Google.es-US-Chirp3-HD-Aoede";
+const VOICE_LANGUAGE = "es-MX";
+const SPEECH_LANGUAGE = "es-CO";
 
-  // Iniciamos con turnCount=1
-  const gather = twiml.gather({
-    input: ["speech"],
-    // Agregamos turnCount=1 a la URL de acción
-    action: "/twilio/process?turnCount=1",
-    method: "POST",
-    speechTimeout: "auto",
-    language: "es-CO",
-    timeout: 6,
-    enhanced: true,
-    bargeIn: true, // Deja de reproducir audio si el usuario empieza a hablar (mejora UX)
-    actionOnEmptyResult: true, // Si no hay voz, ir al process (para manejar error/silencio)
-  });
-
-  gather.say(
-    {
-      voice: "Google.es-US-Chirp3-HD-Aoede",
-      language: "es-MX",
-    },
-    "Hola bienvenido. ¿En qué puedo ayudarle?",
-  );
-
-  res.type("text/xml");
-  res.send(twiml.toString());
-
-  console.info("😎 [handleReceiveCall] finished");
+type ConversationState = {
+  turnCount: number;
+  silenceCount: number;
 };
 
-/**
- * 💬 Proceso de Voz (Loop)
- */
-export const handleProcessSpeech = async (req: Request, res: Response) => {
-  console.info("🎤 [handleProcessSpeech] started");
+// ==============================
+// HELPERS
+// ==============================
 
-  const twiml = new twilio.twiml.VoiceResponse();
+const sendTwiml = (
+  res: Response,
+  twiml: twilio.twiml.VoiceResponse
+) => {
+  res.type("text/xml").send(twiml.toString());
+};
 
-  // 1. Obtener el turno actual desde la query string
-  const maxTurns = 50; // TODO: Límite de seguridad para costos
-  let currentTurn = parseInt(req.query.turnCount as string, 10) || 1;
+const parseCounter = (
+  value: unknown,
+  fallback: number,
+  max: number
+): number => {
+  if (typeof value !== "string") return fallback;
 
-  // 2. Obtener la transcripción
-  const speechResult = req.body.SpeechResult || "";
+  const number = Number(value);
 
-  try {
-    // Caso 1: Silencio o Error de reconocimiento (SpeechResult vacío)
-    if (!speechResult) {
-      // Si es el primer turno y no dijo nada, repetimos.
-      // Si ya lleva muchos turnos de silencio, colgamos.
-      if (currentTurn > 3) {
-        twiml.say(
-          {
-            voice: "Polly.Mia",
-            language: "es-MX",
-          },
-          "Gracias por su llamada, hasta pronto.",
-        );
-
-        twiml.hangup();
-      } else {
-        twiml.say(
-          {
-            voice: "Polly.Mia",
-            language: "es-MX",
-          },
-          "Disculpe, no le entendí. ¿Me repite la pregunta?",
-        );
-
-        // Mantenemos el mismo turnCount si es solo un rechazo,
-        // o lo incrementamos para contar intentos.
-        // Para simplicidad de costos, incrementamos.
-        const nextTurn = currentTurn + 1;
-        const nextGather = twiml.gather({
-          input: ["speech"],
-          action: `/twilio/process?turnCount=${nextTurn}`,
-          method: "POST",
-          speechTimeout: "auto",
-          language: "es-CO",
-          timeout: 6,
-          enhanced: true,
-          bargeIn: true,
-          actionOnEmptyResult: true,
-        });
-        // El goto debe estar dentro del gather o después?
-        // En TwiML, el gather se ejecuta. Al terminar, redirige a action.
-        // Aquí solo definimos el gather siguiente.
-
-        // IMPORTANTE: El gather debe ser el primer elemento si quieres escuchar inmediatamente,
-        // o podemos poner Say primero y luego Gather.
-        // Para este caso: Say -> Gather (espera siguiente input)
-
-        // Corrección de lógica:
-        // Si no hubo entrada, ya ejecutamos un say en la línea de arriba dentro del if?
-        // NO, en TwiML los elementos se ejecutan secuencialmente.
-
-        // Reestructurando la respuesta para el caso de silencio:
-        twiml.clear(); // Limpiamos lo anterior
-
-        twiml.say(
-          {
-            voice: "Polly.Mia",
-            language: "es-MX",
-          },
-          "Disculpe, no le entendí. ¿Me repite?",
-        );
-
-        const retryGather = twiml.gather({
-          input: ["speech"],
-          action: `/twilio/process?turnCount=${nextTurn}`,
-          method: "POST",
-          speechTimeout: "auto",
-          language: "es-CO",
-          timeout: 5,
-          enhanced: true,
-          bargeIn: true,
-          actionOnEmptyResult: true,
-        });
-      }
-
-      res.type("text/xml");
-      res.send(twiml.toString());
-      return;
-    }
-
-    // ===============================================================
-    // Caso 2: El usuario dijo algo
-    // 👀 VERIFICACION DE PALABRAS PARA COLGAR 👀
-    // ===============================================================
-
-    const lowerSpeech = speechResult.toLowerCase();
-    if (
-      lowerSpeech.includes("adios") ||
-      lowerSpeech.includes("basta") ||
-      lowerSpeech.includes("colgar") ||
-      lowerSpeech.includes("salir")
-    ) {
-      twiml.say(
-        {
-          voice: "Polly.Mia",
-          language: "es-MX",
-        },
-        "Gracias, que tenga un buen día.",
-      );
-
-      twiml.hangup();
-      res.type("text/xml");
-      res.send(twiml.toString());
-      return;
-    }
-
-    // ===============================================================
-    // ⭐⭐⭐⭐⭐⭐⭐ ⭐⭐ POSIBLE COMPRA ⭐⭐⭐⭐⭐⭐⭐ ⭐⭐
-    // ===============================================================
-
-    // ===============================================================
-    // Consulta a la IA
-    if (currentTurn > maxTurns) {
-      twiml.say(
-        {
-          voice: "Polly.Mia",
-          language: "es-MX",
-        },
-        "Llegamos al límite de conversaciones. Gracias.",
-      );
-      twiml.hangup();
-    } else {
-      const aiResponse = await respondUser(speechResult);
-
-      // Generar la respuesta con Say + Next Gather
-      twiml.say(
-        {
-          voice: "Polly.Mia",
-          language: "es-MX",
-        },
-        aiResponse,
-      );
-
-      const nextTurn = currentTurn + 1;
-      const nextGather = twiml.gather({
-        input: ["speech"],
-        action: `/twilio/process?turnCount=${nextTurn}`,
-        method: "POST",
-        speechTimeout: "auto",
-        language: "es-CO", // Mantén el idioma de reconocimiento
-        timeout: 60, // TODO: Espera máx de 60 seg para que empiece a hablar
-        enhanced: true,
-        bargeIn: true, // Crucial para que no le hables por encima
-        actionOnEmptyResult: true,
-      });
-
-      // Opcional: Decir "¿Algo más?"
-
-      // nextGather.say(
-      //   {
-      //     voice: "Polly.Mia",
-      //     language: "es-MX",
-      //   },
-      //   "¿Tiene otra pregunta?",
-      // );
-    }
-  } catch (error) {
-    console.error("Error en IA o flujo:", error);
-
-    twiml.say(
-      {
-        voice: "Polly.Mia",
-        language: "es-MX",
-      },
-      "Se produjo un error interno. Lamento el inconveniente.",
-    );
-    twiml.hangup();
+  if (!Number.isSafeInteger(number) || number < 0) {
+    return fallback;
   }
 
-  res.type("text/xml");
-  res.send(twiml.toString());
-  console.info("😎 [handleProcessSpeech] finished");
+  return Math.min(number, max);
 };
 
-/**
- * ⁉️ Handle errors de Twilio si el webhook falla
- */
-export const getErrors = (req: Request, res: Response) => {
-  console.error("💢 ERROR Twilio:", req.body);
-  // Enviar 200 para no hacer que Twilio reintente infinitely
-  res.status(200).send();
+const getState = (req: Request): ConversationState => ({
+  turnCount: parseCounter(
+    req.query.turnCount,
+    0,
+    MAX_TURNS + 1
+  ),
+  silenceCount: parseCounter(
+    req.query.silenceCount,
+    0,
+    MAX_SILENCES
+  ),
+});
+
+const getActionUrl = (
+  state: ConversationState
+): string => {
+  const params = new URLSearchParams({
+    turnCount: String(state.turnCount),
+    silenceCount: String(state.silenceCount),
+  });
+
+  return `/twilio/process?${params.toString()}`;
+};
+
+// ==============================
+// REUSABLE GATHER
+// ==============================
+
+const listenToUser = (
+  twiml: twilio.twiml.VoiceResponse,
+  state: ConversationState,
+  message?: string
+) => {
+  const gather = twiml.gather({
+    input: ["speech"],
+    action: getActionUrl(state),
+    method: "POST",
+    language: SPEECH_LANGUAGE,
+    speechTimeout: "auto",
+    timeout: 6,
+    bargeIn: true,
+    actionOnEmptyResult: true,
+  });
+
+  if (message) {
+    gather.say(
+      {
+        voice: VOICE,
+        language: VOICE_LANGUAGE,
+      },
+      message
+    );
+  }
+
+  return gather;
+};
+
+// ==============================
+// END CALL
+// ==============================
+
+const endCall = (
+  twiml: twilio.twiml.VoiceResponse,
+  message: string
+) => {
+  twiml.say(
+    {
+      voice: VOICE,
+      language: VOICE_LANGUAGE,
+    },
+    message
+  );
+
+  twiml.hangup();
+};
+
+// ==============================
+// DETECT GOODBYE
+// ==============================
+
+const wantsToEndCall = (speech: string): boolean => {
+  const normalized = speech
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
+  const goodbyePatterns = [
+    /\badios\b/,
+    /\bhasta luego\b/,
+    /\bpuedes colgar\b/,
+    /\bquiero colgar\b/,
+    /\bterminar la llamada\b/,
+    /\bno necesito nada mas\b/,
+    /\beso es todo\b/,
+  ];
+
+  return goodbyePatterns.some((pattern) =>
+    pattern.test(normalized)
+  );
+};
+
+// ==============================
+// RECEIVE CALL
+// ==============================
+
+export const handleReceiveCall = (
+  req: Request,
+  res: Response
+) => {
+  console.info("📞 Incoming call", {
+    callSid: req.body.CallSid,
+  });
+
+  const twiml = new twilio.twiml.VoiceResponse();
+
+  listenToUser(
+    twiml,
+    {
+      turnCount: 0,
+      silenceCount: 0,
+    },
+    "Hola, bienvenido a Audífonos CGT. ¿En qué puedo ayudarte?"
+  );
+
+  return sendTwiml(res, twiml);
+};
+
+// ==============================
+// PROCESS SPEECH
+// ==============================
+
+export const handleProcessSpeech = async (
+  req: Request,
+  res: Response
+) => {
+  const twiml = new twilio.twiml.VoiceResponse();
+
+  const state = getState(req);
+
+  const speechResult =
+    typeof req.body.SpeechResult === "string"
+      ? req.body.SpeechResult.trim()
+      : "";
+
+  console.info("🎤 Processing speech", {
+    callSid: req.body.CallSid,
+    turnCount: state.turnCount,
+    silenceCount: state.silenceCount,
+    speechResult,
+  });
+
+  // 1. MANEJAR SILENCIO
+
+  if (!speechResult) {
+    const nextSilenceCount = state.silenceCount + 1;
+
+    if (nextSilenceCount >= MAX_SILENCES) {
+      endCall(
+        twiml,
+        "No he recibido respuesta. Gracias por llamar. Hasta pronto."
+      );
+
+      return sendTwiml(res, twiml);
+    }
+
+    listenToUser(
+      twiml,
+      {
+        turnCount: state.turnCount,
+        silenceCount: nextSilenceCount,
+      },
+      "Disculpa, no te escuché. ¿Puedes repetir tu pregunta?"
+    );
+
+    return sendTwiml(res, twiml);
+  }
+
+  // 2. DETECTAR DESPEDIDA
+
+  if (wantsToEndCall(speechResult)) {
+    endCall(
+      twiml,
+      "Gracias por comunicarte con nosotros. Que tengas un excelente día."
+    );
+
+    return sendTwiml(res, twiml);
+  }
+
+  // 3. VALIDAR LÍMITE DE TURNOS
+
+  if (state.turnCount >= MAX_TURNS) {
+    endCall(
+      twiml,
+      "Hemos llegado al límite de esta conversación. Gracias por llamar."
+    );
+
+    return sendTwiml(res, twiml);
+  }
+
+  // 4. CONSULTAR IA
+
+  try {
+    const aiResponse = await respondUser(speechResult);
+
+    if (
+      typeof aiResponse !== "string" ||
+      !aiResponse.trim()
+    ) {
+      throw new Error("Empty AI response");
+    }
+
+    const nextState: ConversationState = {
+      turnCount: state.turnCount + 1,
+      silenceCount: 0,
+    };
+
+    console.info("✅ AI response generated", {
+      callSid: req.body.CallSid,
+      turnCount: nextState.turnCount,
+    });
+
+    // 5. RESPONDER Y ESCUCHAR NUEVAMENTE
+
+    listenToUser(
+      twiml,
+      nextState,
+      aiResponse.trim()
+    );
+
+  } catch (error) {
+    console.error("❌ AI processing error", {
+      callSid: req.body.CallSid,
+      error,
+    });
+
+    // No colgar inmediatamente por un error
+    listenToUser(
+      twiml,
+      state,
+      "Disculpa, tuve un inconveniente al procesar tu pregunta. ¿Puedes repetirla?"
+    );
+  }
+
+  return sendTwiml(res, twiml);
+};
+
+// ==============================
+// TWILIO ERRORS
+// ==============================
+
+export const getErrors = (
+  req: Request,
+  res: Response
+) => {
+  console.error("💢 Twilio error", req.body);
+
+  return res.sendStatus(200);
 };
