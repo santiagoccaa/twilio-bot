@@ -1,8 +1,6 @@
 import twilio from "twilio";
 import { respondUser } from "./service";
-
 import { SpeechInput, ConversationState } from "@shared-types/index";
-
 import {
   incrementTurn,
   incrementSilence,
