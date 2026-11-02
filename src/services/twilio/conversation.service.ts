@@ -158,14 +158,12 @@ export const processConversation = async (
   });
 
   // 1. SILENCE
-
   if (!speechResult) {
     handleSilence(twiml, state);
     return twiml.toString();
   }
 
   // 2. GOODBYE
-
   if (wantsToEndCall(speechResult)) {
     endCall(
       twiml,
@@ -176,7 +174,6 @@ export const processConversation = async (
   }
 
   // 3. TURN LIMIT
-
   if (state.turnCount >= CALL_CONFIG.MAX_TURNS) {
     endCall(
       twiml,
@@ -187,7 +184,6 @@ export const processConversation = async (
   }
 
   // 4. AI PROCESSING
-
   try {
     const aiResponse = await respondUser(speechResult);
 
@@ -196,7 +192,6 @@ export const processConversation = async (
     }
 
     // 5. INCREMENT TURN
-
     const nextState = incrementTurn(state);
 
     console.info("✅ AI response", {
@@ -205,7 +200,6 @@ export const processConversation = async (
     });
 
     // 6. RESPOND AND LISTEN AGAIN
-
     listenToUser(twiml, nextState, aiResponse.trim());
   } catch (error) {
     console.error("❌ Conversation error", {
