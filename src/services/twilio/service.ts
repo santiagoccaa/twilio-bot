@@ -1,6 +1,6 @@
-import { systemPrompt } from "@/config/openAi.prompt";
+import { systemPromptMenu } from "@/config/menu.prompt";
 import { optimizeText } from "@/utils";
-import { GoogleGenAI } from "@google/genai";
+import { Content, GoogleGenAI } from "@google/genai";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
@@ -16,9 +16,10 @@ const MODEL = "gemini-3.5-flash-lite";
 const AI_TIMEOUT_MS = 8000;
 
 export const respondUser = async (
-  contents: string
+  questionUser: string,
+  history: Content[] = [],
 ): Promise<string> => {
-  const question = contents.trim();
+  const question = questionUser.trim();
 
   if (!question) {
     throw new Error("EMPTY_USER_QUESTION");
@@ -35,9 +36,15 @@ export const respondUser = async (
   try {
     const response = await ai.models.generateContent({
       model: MODEL,
-      contents: question,
+      contents: [
+        ...history,
+        {
+          role: "user",
+          parts: [{ text: question }],
+        },
+      ],
       config: {
-        systemInstruction: systemPrompt,
+        systemInstruction: systemPromptMenu,
         temperature: 0.3,
         maxOutputTokens: 200,
         abortSignal: controller.signal,
@@ -56,9 +63,7 @@ export const respondUser = async (
       throw new Error("EMPTY_CLEAN_RESPONSE");
     }
 
-    const duration = Math.round(
-      performance.now() - startTime
-    );
+    const duration = Math.round(performance.now() - startTime);
 
     console.info("🤖 Gemini response", {
       durationMs: duration,
@@ -66,17 +71,13 @@ export const respondUser = async (
     });
 
     return cleanResponse;
-
   } catch (error) {
     console.error("❌ Gemini error", {
-      durationMs: Math.round(
-        performance.now() - startTime
-      ),
+      durationMs: Math.round(performance.now() - startTime),
       error,
     });
 
     throw error;
-
   } finally {
     clearTimeout(timeout);
   }

@@ -1,5 +1,37 @@
 import { CALL_CONFIG } from "@/config/twilio.config";
 import { ConversationState } from "@shared-types/index";
+import type { Content } from "@google/genai";
+
+const conversations = new Map<string, Content[]>();
+export const getHistory = (callSid: string): Content[] => {
+  return [...(conversations.get(callSid) ?? [])];
+};
+
+export const addExchange = (
+  callSid: string,
+  question: string,
+  answer: string,
+): void => {
+  const history = getHistory(callSid);
+
+  history.push(
+    {
+      role: "user",
+      parts: [{ text: question }],
+    },
+    {
+      role: "model",
+      parts: [{ text: answer }],
+    },
+  );
+
+  // Conservar los últimos 10 intercambios
+  conversations.set(callSid, history.slice(-20));
+};
+
+export const clearHistory = (callSid: string): void => {
+  conversations.delete(callSid);
+};
 
 const parseCounter = (
   value: unknown,

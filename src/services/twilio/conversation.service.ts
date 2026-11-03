@@ -4,8 +4,11 @@ import { SpeechInput, ConversationState } from "@shared-types/index";
 import {
   incrementTurn,
   incrementSilence,
+  getHistory,
+  addExchange,
 } from "./model";
 import { CALL_CONFIG, INITIAL_STATE } from "@/config/twilio.config";
+import { Content } from "@google/genai";
 
 const VoiceResponse = twilio.twiml.VoiceResponse;
 
@@ -55,7 +58,11 @@ const listenToUser = (
   }
 };
 
-const endCall = (twiml: twilio.twiml.VoiceResponse, message: string): void => {
+const endCall = (
+  twiml: twilio.twiml.VoiceResponse,
+  message: string,
+  history: Content[],
+): void => {
   twiml.say(
     {
       voice: CALL_CONFIG.VOICE,
@@ -65,6 +72,8 @@ const endCall = (twiml: twilio.twiml.VoiceResponse, message: string): void => {
   );
 
   twiml.hangup();
+
+  console.log("📖 HISTORIAL:", history)
 };
 
 // ==============================
@@ -120,6 +129,7 @@ export const startConversation = (): string => {
 const handleSilence = (
   twiml: twilio.twiml.VoiceResponse,
   state: ConversationState,
+  callSid:string
 ): void => {
   const nextState = incrementSilence(state);
 
@@ -127,6 +137,7 @@ const handleSilence = (
     endCall(
       twiml,
       "No he recibido respuesta. Gracias por llamar. Hasta pronto.",
+      getHistory(callSid),
     );
 
     return;
@@ -159,7 +170,7 @@ export const processConversation = async (
 
   // 1. SILENCE
   if (!speechResult) {
-    handleSilence(twiml, state);
+    handleSilence(twiml, state, callSid);
     return twiml.toString();
   }
 
@@ -168,6 +179,7 @@ export const processConversation = async (
     endCall(
       twiml,
       "Gracias por comunicarte con nosotros. Que tengas un excelente día.",
+      getHistory(callSid),
     );
 
     return twiml.toString();
@@ -178,6 +190,7 @@ export const processConversation = async (
     endCall(
       twiml,
       "Hemos llegado al límite de esta conversación. Gracias por llamar.",
+      getHistory(callSid),
     );
 
     return twiml.toString();
@@ -185,21 +198,27 @@ export const processConversation = async (
 
   // 4. AI PROCESSING
   try {
-    const aiResponse = await respondUser(speechResult);
+    const history = getHistory(callSid);
 
-    if (typeof aiResponse !== "string" || !aiResponse.trim()) {
+    const aiResponse = await respondUser(speechResult, history);
+
+    if (!aiResponse.trim()) {
       throw new Error("EMPTY_AI_RESPONSE");
     }
 
-    // 5. INCREMENT TURN
+    // 5. SAVE CONVERSATION HISTORY
+    addExchange(callSid, speechResult, aiResponse);
+
+    // 6. INCREMENT TURN
     const nextState = incrementTurn(state);
 
     console.info("✅ AI response", {
       callSid,
       turnCount: nextState.turnCount,
+      historyLength: getHistory(callSid).length,
     });
 
-    // 6. RESPOND AND LISTEN AGAIN
+    // 7. RESPOND AND LISTEN AGAIN
     listenToUser(twiml, nextState, aiResponse.trim());
   } catch (error) {
     console.error("❌ Conversation error", {
@@ -207,7 +226,6 @@ export const processConversation = async (
       error,
     });
 
-    // Recover without incrementing turnCount
     listenToUser(
       twiml,
       {
