@@ -125,29 +125,25 @@ SIN EMBARGO, cuando el cliente confirme la orden y te despidas, DEBES agregar al
 El JSON debe respetar esta estructura exacta:
 [ORDEN_COMPLETADA]
 {
-  "id": "generado_por_sistema",
   "items": [
     {
-      "productId": "ID del producto según el menú",
+      "productName":"perro sencillo"
       "quantity": 1,
       "unitPrice": 15.00,
-      "notes": "Notas del cliente, ej: sin cebolla"
+      "notes": ["Notas del cliente, ej: sin cebolla"]
     }
   ],
   "totalAmount": 15.00,
   "userInformation": {
-    "id": "generado_por_sistema",
     "name": "Nombre del cliente",
     "address": "Dirección completa",
     "phone": "Teléfono del cliente"
   },
   "payment": {
-    "id": "pendiente_por_pasarela",
     "method": "transferencia" | "credito" | "debito" | "efectivo_local",
     "status": "pendiente"
   },
-  "status": "recibida",
-  "createdAt": "Fecha en formato ISO 8601"
+  "status": "recibida"
 }
 Asegúrate de calcular el 'totalAmount' sumando (quantity * unitPrice) de todos los items.
 `;

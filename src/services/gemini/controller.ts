@@ -1,6 +1,6 @@
 import { Content } from "@google/genai";
 import { Request, Response } from "express";
-import { respondUser } from "./service";
+import { createOrder, respondUser } from "./service";
 
 interface ConversationRequest {
   questionUser: string;
@@ -27,7 +27,7 @@ export const Conversation = async (
 
       try {
         const parsedOrder = JSON.parse(parts[1].trim());
-        console.log("🔥 ORDEN LISTA PARA PRISMA:", parsedOrder);
+        createOrder(parsedOrder)
       } catch (jsonError) {
         console.error("Error parseando el JSON de la orden:", jsonError);
       }

@@ -1,6 +1,7 @@
 import { systemPromptMenu } from "@/config/menu.prompt";
 import { optimizeText } from "@/utils";
 import { Content, GoogleGenAI } from "@google/genai";
+import { AddOrderRequest } from "@shared-types/order.types";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
@@ -63,7 +64,7 @@ export const respondUser = async (
       throw new Error("EMPTY_CLEAN_RESPONSE");
     }
 
-    const duration = Math.round(performance.now() - startTime);
+    // const duration = Math.round(performance.now() - startTime);
 
     // console.info("🤖 Gemini response", {
     //   durationMs: duration,
@@ -92,4 +93,11 @@ export const respondUser = async (
   } finally {
     clearTimeout(timeout);
   }
+};
+
+
+export const createOrder = async (order: AddOrderRequest): Promise<boolean> => {
+
+  console.log(order)
+  return true;
 };
